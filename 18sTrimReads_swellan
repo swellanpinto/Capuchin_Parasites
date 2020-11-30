@@ -1,0 +1,35 @@
+########################################################################
+## Trimming reads for swellan's 18s samples prior to running in DADA2 ##
+########################################################################
+
+#### make a list of sample names and directories
+
+ls RawReads/ | grep "_R1" | perl -lpe 's/^(.*)R[12](_001)(.fastq.gz)$/$1/' >SAMPLES.txt
+
+mkdir trimmed
+mkdir logs
+mkdir logs/cutadapt
+
+# Single example of read trimming
+
+	# Don't use this one # cutadapt -e 0 -O 17 -g TCGTCGGCAGCGTCAGATGTGTATAAGAGACAGGCCAGCAVCYGCGGTAAY -G GTCTCGTGGGCTCGGAGATGTGTATAAGAGACAGCCGTCAATTHCTTYAART -a AYTTRAAGDAATTGACGGCTGTCTCTTATACACATCTCCGAGCCCACGAGAC -A RTTACCGCRGBTGCTGGCCTGTCTCTTATACACATCTGACGCTGCCGACGA -m 50 -o ../trimmed/78_S78_L001_R1_001.trimmed.fastq.gz -p ../trimmed/78_S78_L001_R2_001.trimmed.fastq.gz 78_S78_L001_R1_001.fastq.gz 78_S78_L001_R2_001.fastq.gz
+
+ ../../RawReads/Zazu-216A_S41_L001_R1_001.fastq.gz ../../RawReads/Zazu-216A_S41_L001_R2_001.fastq.gz Zazu-216A_S41_L001_R1_001.trimmomatic.fastq.gz Zazu-216A_S41_L001_R1_001.trimmomatic.unpaired.fastq.gz Zazu-216A_S41_L001_R2_001.trimmomatic.fastq.gz Zazu-216A_S41_L001_R2_001.trimmomatic.unpaired.fastq.gz ILLUMINACLIP:/Users/joseph.orkin/Programs/Trimmomatic-0.36/adapters/NexteraPE-PE.fa:2:30:10 LEADING:1 TRAILING:1 SLIDINGWINDOW:1:1 MINLEN:36
+
+cutadapt -e 0 -O 17 -g GCCAGCAVCYGCGGTAAY -G CCGTCAATTHCTTYAART -a AYTTRAAGDAATTGACGG -A RTTACCGCRGBTGCTGGC -m 50 -o ../trimmed/Baloo-445A_S25_L001_R1_001.trimmed.fastq.gz -p ../trimmed/Baloo-445A_S25_L001_R2_001.trimmed.fastq.gz Baloo-445A_S25_L001_R1_001.fastq.gz Baloo-445A_S25_L001_R2_001.fastq.gz 
+
+~/Programs/Trimmomatic
+
+##### Loop through while trimming Nextera adaptors then trim primers
+
+	# From ~/18s/trimmed/ADAPTER_TRIMMED
+
+for f in $(cat ../../SAMPLES.txt); do java -jar ~/Programs/Trimmomatic-0.36/trimmomatic-0.36.jar PE ../../RawReads/${f}R1_001.fastq.gz ../../RawReads/${f}R2_001.fastq.gz ${f}R1_001.trimmomatic.fastq.gz ${f}R1_001.trimmomatic.unpaired.fastq.gz ${f}R2_001.trimmomatic.fastq.gz ${f}R2_001.trimmomatic.unpaired.fastq.gz ILLUMINACLIP:/Users/joseph.orkin/Programs/Trimmomatic-0.36/adapters/NexteraPE-PE.fa:2:30:10 LEADING:1 TRAILING:1 SLIDINGWINDOW:1:1 MINLEN:36 2>> ../../logs/AdapterTrim.log ; done
+
+for f in $(cat ../../SAMPLES.txt); do cutadapt -e 0 -O 17 -g GCCAGCAVCYGCGGTAAY -G CCGTCAATTHCTTYAART -a AYTTRAAGDAATTGACGG -A RTTACCGCRGBTGCTGGC -m 50 -o ../${f}R1.trimmed.fastq.gz -p ../${f}R2.trimmed.fastq.gz ${f}R1_001.trimmomatic.fastq.gz ${f}R2_001.trimmomatic.fastq.gz > ../../logs/cutadapt/$f.log; done
+
+#### Run fastqc
+
+for f in *.gz; do ~/Programs/FastQC/fastqc -o ../fastqc/TrimmedReads $f; done 
+
+
