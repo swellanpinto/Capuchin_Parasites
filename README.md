@@ -1,7 +1,3 @@
 # Capuchin_Parasites
-scripts for running analyses for project on capuchin parasites
 
-testing line
-
-testing line
-
+Scripts for running analyses for manuscript on detecting parasitic worms in capuchins
