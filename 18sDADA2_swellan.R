@@ -3,14 +3,23 @@
 ## Load and install packages
 ###########
 
+
+
 #source("http://bioconductor.org/biocLite.R")
-#biocLite(suppressUpdates = FALSE)
+if (!requireNamespace("BiocManager", quietly = TRUE))
+  install.packages("BiocManager")
+BiocManager::install(version = "3.12")
+biocLite(suppressUpdates = FALSE)
+BiocManager::install(c("ShortRead", suppressUpdates = FALSE))
 #biocLite("ShortRead", suppressUpdates = FALSE)
+BiocManager::install(c("devtools"))
 #biocLite("devtools")
-#library("devtools")
-#devtools::install_github("benjjneb/dada2")
+library("devtools")
+devtools::install_github("benjjneb/dada2")
+#install_github("benjjneb/dada2")
 
 library("knitr")
+BiocManager::install("BiocStyle")
 library("BiocStyle")
 library("dada2")
 opts_chunk$set(cache = FALSE,fig.path="dadafigure/")
