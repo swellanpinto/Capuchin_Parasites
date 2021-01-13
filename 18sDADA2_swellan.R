@@ -3,14 +3,14 @@
 ## Load and install packages
 ###########
 
-
+#R.Version()
 
 #source("http://bioconductor.org/biocLite.R")
 if (!requireNamespace("BiocManager", quietly = TRUE))
   install.packages("BiocManager")
 BiocManager::install(version = "3.12")
-biocLite(suppressUpdates = FALSE)
-BiocManager::install(c("ShortRead", suppressUpdates = FALSE))
+#biocLite(suppressUpdates = FALSE)
+BiocManager::install(c("ShortRead"))
 #biocLite("ShortRead", suppressUpdates = FALSE)
 BiocManager::install(c("devtools"))
 #biocLite("devtools")
@@ -26,6 +26,11 @@ opts_chunk$set(cache = FALSE,fig.path="dadafigure/")
 
 #ERROR# read_chunk(file.path("src", "bioinformatics.R"))
 
+install.packages("ggplot2")
+install.packages("gridExtra")
+BiocManager::install("phyloseq")
+BiocManager::install("DECIPHER")
+BiocManager::install("phangorn")
 .cran_packages <- c("ggplot2", "gridExtra")
 .bioc_packages <- c("dada2", "phyloseq", "DECIPHER", "phangorn")
 #.inst <- .cran_packages %in% installed.packages()
@@ -39,7 +44,7 @@ opts_chunk$set(cache = FALSE,fig.path="dadafigure/")
 #}
 sapply(c(.cran_packages, .bioc_packages), require, character.only = TRUE)
 set.seed(100)
-setwd("~/18s")
+setwd("/Users/swellanpinto/Desktop/18s")
 
 #ps <- readRDS("ps_dada2.rds")
 # metadata <- sample_data(ps)
@@ -48,8 +53,8 @@ setwd("~/18s")
 ##Download and sort files
 ################
 
-miseq_path <- ("/Users/joseph.orkin/18s/trimmed")
-filt_path <- ("/Users/joseph.orkin/18s/filtered")
+miseq_path <- ("/Users/swellanpinto/Desktop/18s/trimmed")
+filt_path <- ("/Users/swellanpinto/Desktop/18s/filtered")
 fns <- sort(list.files(miseq_path, full.names = TRUE))
 fnFs <- fns[grepl("_R1", fns)]
 fnRs <- fns[grepl("_R2", fns)]
@@ -74,8 +79,8 @@ if(!file_test("-d", filt_path)) dir.create(filt_path)
 filtFs <- file.path(filt_path, basename(fnFs))
 filtRs <- file.path(filt_path, basename(fnRs))
 
-out <- filterAndTrim(fnFs, filtFs, fnRs, filtRs, truncLen=c(226,226), 
-                     #out <- filterAndTrim(fnFs, filtFs, fnRs, filtRs, truncLen=c(227,227),
+#out <- filterAndTrim(fnFs, filtFs, fnRs, filtRs, truncLen=c(226,226), 
+out <- filterAndTrim(fnFs, filtFs, fnRs, filtRs, truncLen=c(227,227),
                      maxN=0, maxEE=c(2,2), truncQ=2, rm.phix=TRUE,
                      compress=TRUE, multithread=TRUE, verbose=TRUE)
 out
