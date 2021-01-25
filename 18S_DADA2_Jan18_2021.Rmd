@@ -93,7 +93,7 @@ track
 
 Assign taxonomy:
 ```{r}
-taxa <- assignTaxonomy(seqtab.nochim, "/Users/swellan.pinto/Desktop/18S_Jan13_2021_SLP/trimmed_unzipped_edited/silva_132.18s.99_rep_set.dada2.fa.gz", multithread=TRUE)
+taxa <- assignTaxonomy(seqtab.nochim, "/Users/swellan.pinto/Desktop/18S_Jan13_2021_SLP/trimmed_unzipped_edited/silva_132.18s.99_rep_set.dada2_edited_SLP.fa.gz", multithread=TRUE)
 
 taxa.print <- taxa # Removing sequence rownames for display only
 rownames(taxa.print) <- NULL
