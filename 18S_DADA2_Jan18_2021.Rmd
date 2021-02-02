@@ -39,8 +39,8 @@ filtRs <- file.path(path, "filtered", paste0(sample.names, "_R_filt.fastq.gz"))
 names(filtFs) <- sample.names
 names(filtRs) <- sample.names
 
-out <- filterAndTrim(fnFs, filtFs, fnRs, filtRs, truncLen=c(227,125),
-              maxN=0, maxEE=c(2,2), truncQ=2, rm.phix=TRUE,
+out <- filterAndTrim(fnFs, filtFs, fnRs, filtRs, truncLen=c(227,227),
+              maxN=0, maxEE=c(2,3), truncQ=2, rm.phix=TRUE,
               compress=TRUE, multithread=TRUE)
 out
 ```
@@ -93,7 +93,7 @@ track
 
 Assign taxonomy:
 ```{r}
-taxa <- assignTaxonomy(seqtab.nochim, "/Users/swellan.pinto/Desktop/18S_Jan13_2021_SLP/trimmed_unzipped_edited/pr2_version_4.12.0_18S_dada2.fasta.gz", multithread=TRUE)
+taxa <- assignTaxonomy(seqtab.nochim, "/Users/swellan.pinto/Desktop/18S_Jan13_2021_SLP/trimmed_unzipped_edited/silva_132.18s.99_rep_set.dada2.fa.gz", multithread=TRUE)
 
 taxa.print <- taxa # Removing sequence rownames for display only
 rownames(taxa.print) <- NULL
