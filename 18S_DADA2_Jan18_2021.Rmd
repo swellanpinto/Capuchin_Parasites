@@ -93,7 +93,8 @@ track
 
 Assign taxonomy:
 ```{r}
-taxa <- assignTaxonomy(seqtab.nochim, "/Users/swellan.pinto/Desktop/18S_Jan13_2021_SLP/trimmed_unzipped_edited/silva_132.18s.99_rep_set.dada2.fa.gz", multithread=TRUE)
+taxa <- assignTaxonomy(seqtab.nochim, "/Users/swellan.pinto/Desktop/18S_Jan13_2021_SLP/trimmed_unzipped_edited/pr2_version_4.12.0_18S_dada2.fasta.gz", 
+  taxLevels = c("Kingdom","Supergroup","Division","Class","Order","Family","Genus","Species"), multithread=TRUE)
 
 taxa.print <- taxa # Removing sequence rownames for display only
 rownames(taxa.print) <- NULL
@@ -110,24 +111,9 @@ theme_set(theme_bw())
 ```
 
 ```{r}
-samples.out <- rownames(seqtab.nochim)
-subject <- sapply(strsplit(samples.out, "D"), `[`, 1)
-gender <- substr(subject,1,1)
-subject <- substr(subject,2,999)
-day <- as.integer(sapply(strsplit(samples.out, "D"), `[`, 2))
-samdf <- data.frame(Subject=subject, Gender=gender, Day=day)
-samdf$When <- "Early"
-samdf$When[samdf$Day>100] <- "Late"
-rownames(samdf) <- samples.out
-
-ps <- phyloseq(otu_table(seqtab.nochim, taxa_are_rows=FALSE), 
-               sample_data(samdf), 
-               tax_table(taxa))
-
-dna <- Biostrings::DNAStringSet(taxa_names(ps))
-names(dna) <- taxa_names(ps)
-ps <- merge_phyloseq(ps, dna)
-taxa_names(ps) <- paste0("ASV", seq(ntaxa(ps)))
-ps
-saveRDS(ps, "ps_18S_Swellan_Feb01_2021.rds")
+metadata <- read.csv("/Users/swellan.pinto/Desktop/18S_metadata_Feb05_2021_SLP.csv", header=T, stringsAsFactors = T) 
+View(metadata)
+ps <- phyloseq(otu_table(seqtab.nochim, taxa_are_rows=FALSE), sample_data(metadata), tax_table(taxa))
+sample_names(ps)
+saveRDS(ps, "/Users/swellan.pinto/Desktop/18S_capuchin_PR2_RL227-125_maxEE2-2.rds")
 ```
