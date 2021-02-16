@@ -104,6 +104,9 @@ taxa.print
 
 Generate a phyloseq object:
 ```{r}
+library(phyloseq); packageVersion("phyloseq")
+library(Biostrings); packageVersion("Biostrings")
+
 metadata <- read.csv("/Users/swellan.pinto/Desktop/18S_metadata_Feb16_2021_SLP.csv", header=T, stringsAsFactors = T) 
 all(rownames(seqtab.nochim) %in% metadata$SampleID)
 rownames(metadata) <- metadata$SampleID
