@@ -113,5 +113,5 @@ rownames(metadata) <- metadata$SampleID
 View(metadata)
 ps <- phyloseq(otu_table(seqtab.nochim, taxa_are_rows=FALSE), sample_data(metadata), tax_table(taxa))
 sample_names(ps)
-saveRDS(ps, "/Users/swellan.pinto/Desktop/18S_capuchin_PR2_RL227-125_maxEE2-2.rds")
+#saveRDS(ps, "/Users/swellan.pinto/Desktop/18S_capuchin_PR2_RL227-125_maxEE2-2.rds")
 ```
