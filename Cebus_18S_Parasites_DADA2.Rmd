@@ -1,0 +1,259 @@
+---
+title: "Cebus_18S_Parasites_DADA2"
+author: "Melin Lab"
+date: "8/15/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+> Load 18S data, then remove adapters primers with cutadapt.
+
+```{r}
+
+# in bash type: conda activate cutadaptenv 
+
+setwd("~/PROJECTS/18S")
+library(dada2);packageVersion("dada2")
+library(ShortRead);packageVersion("ShortRead")
+library(Biostrings);packageVersion("Biostrings")
+
+path <- "~/PROJECTS/18S/RawReads"
+list.files(path)
+
+fnFs <- sort(list.files(path, pattern = "_R1_001.fastq.gz", full.names = TRUE)) # Raw forward reads 
+fnRs <- sort(list.files(path, pattern = "_R2_001.fastq.gz", full.names = TRUE)) # Raw forward reads 
+
+## Filter out any reads with ambiguous nucleotides (Ns)
+
+path <- "~/PROJECTS/18S"
+path.filtN <- "~/PROJECTS/18S/filtN"
+
+## Remove reads with ambiguous calls. Rename and put N-filterd files in filtN/ subdirectory
+fnFs.filtN <- file.path(path.filtN, basename(sub('\\.fastq.gz', '.NoN.fq.gz', fnFs))) 
+fnRs.filtN <- file.path(path.filtN, basename(sub('\\.fastq.gz', '.NoN.fq.gz', fnRs))) 
+
+filterAndTrim(fnFs, fnFs.filtN, fnRs, fnRs.filtN, maxN = 0, multithread = TRUE)
+
+## Count the number of Nextera Transposase adapters in each read. There is a lot of readthrough in some cases
+
+FWD <- "TCGTCGGCAGCGTCAGATGTGTATAAGAGACAG" # Nextera Transposase F
+REV <- "GTCTCGTGGGCTCGGAGATGTGTATAAGAGACAG"  # Nextera Transposase R
+
+allOrients <- function(primer) {
+    # Create all orientations of the input sequence
+    require(Biostrings)
+    dna <- DNAString(primer)  # The Biostrings works w/ DNAString objects rather than character vectors
+    orients <- c(Forward = dna, Complement = complement(dna), Reverse = reverse(dna), 
+        RevComp = reverseComplement(dna))
+    return(sapply(orients, toString))  # Convert back to character vector
+}
+FWD.orients <- allOrients(FWD)
+REV.orients <- allOrients(REV)
+FWD.orients
+REV.orients
+
+primerHits <- function(primer, fn) {
+    # Counts number of reads in which the primer is found
+    nhits <- vcountPattern(primer, sread(readFastq(fn)), fixed = FALSE)
+    return(sum(nhits > 0))
+}
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.filtN[[10]]), 
+    FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.filtN[[10]]), 
+    REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.filtN[[10]]), 
+    REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.filtN[[10]]))
+
+## Remove stray adapters
+
+#cutadapt <- "/usr/local/bin/cutadapt" # CHANGE ME to the cutadapt path on your machine
+cutadapt <- "/Users/MelinLab/miniconda3/envs/cutadaptenv/bin/cutadapt"
+system2(cutadapt, args = "--version") # Run shell commands from R
+
+path.cut <- file.path(path, "ADAPTER_TRIM")
+if(!dir.exists(path.cut)) dir.create(path.cut)
+
+fnFs.cut <- file.path(path.cut, basename(sub('\\.NoN.fq.gz', '.NoN.NoAd.fq.gz', fnFs.filtN)))
+fnRs.cut <- file.path(path.cut, basename(sub('\\.NoN.fq.gz', '.NoN.NoAd.fq.gz', fnRs.filtN)))
+FWD.RC <- dada2:::rc(FWD)
+REV.RC <- dada2:::rc(REV)
+
+## Trim FWD and the reverse-complement of REV off of R1 (forward reads)
+R1.flags <- paste("-g", FWD, "-a", REV.RC) 
+R2.flags <- paste("-G", REV, "-A", FWD.RC) 
+
+## Run Cutadapt on adapters
+
+fnFs2 <- fnFs[1:10] # Test case
+
+for(i in seq_along(fnFs)) {
+  system2(cutadapt, args = c(R1.flags, R2.flags, "-n", 2, # -n 2 required to remove FWD and REV from reads
+                             "-j", 15, # run with 15 cores
+                             "-o", fnFs.cut[i], "-p", fnRs.cut[i], # output files
+                             fnFs.filtN[i], fnRs.filtN[i])) # input files
+}
+
+
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut[[10]]), 
+    FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.cut[[10]]), 
+    REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut[[10]]), 
+    REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.cut[[10]]))
+
+
+FWD <- "GTGCCAGCMGCCGCGGTAA"  ## Forward primer sequence
+REV <- "CCGTCAATTCMTTTRAGT"  ## Reverse primer sequence 
+FWD.RC <- dada2:::rc(FWD)
+REV.RC <- dada2:::rc(REV)
+R1.flags <- paste("-g", FWD, "-a", REV.RC) 
+R2.flags <- paste("-G", REV, "-A", FWD.RC) 
+
+path.cut <- file.path(path, "PRIMER_TRIM")
+if(!dir.exists(path.cut)) dir.create(path.cut)
+
+fnFs.cut2 <- file.path(path.cut, basename(sub('\\.NoN.NoAd.fq.gz', '.NoN.NoAd.NoP.fq.gz', fnFs.cut)))
+fnRs.cut2 <- file.path(path.cut, basename(sub('\\.NoN.NoAd.fq.gz', '.NoN.NoAd.NoP.fq.gz', fnRs.cut)))
+
+FWD.orients <- allOrients(FWD)
+REV.orients <- allOrients(REV)
+
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut[[10]]), 
+    FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.cut[[10]]), 
+    REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut[[10]]), 
+    REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.cut[[10]]))
+
+# Run Cutadapt on primers
+
+
+for(i in seq_along(fnFs)) {
+  system2(cutadapt, args = c(R1.flags, R2.flags, "-n", 2, # -n 2 required to remove FWD and REV from reads
+                             "-j", 15, # run with 15 cores
+                             "-m", 50, # remove trimmed sequences less 50 bp in length 
+                             "--discard-untrimmed", # Remove seqs that don't have the primer
+                             "-o", fnFs.cut2[i], "-p", fnRs.cut2[i], # output files
+                             fnFs.cut[i], fnRs.cut[i])) # input files
+}
+
+rbind(FWD.ForwardReads = sapply(FWD.orients, primerHits, fn = fnFs.cut2[[10]]), 
+    FWD.ReverseReads = sapply(FWD.orients, primerHits, fn = fnRs.cut2[[10]]), 
+    REV.ForwardReads = sapply(REV.orients, primerHits, fn = fnFs.cut2[[10]]), 
+    REV.ReverseReads = sapply(REV.orients, primerHits, fn = fnRs.cut2[[10]]))
+
+```
+
+
+```{r}
+
+## Forward and reverse fastq filenames have the format:
+
+cutFs <- sort(list.files(path.cut, pattern = "_R1_001.NoN.NoAd.NoP.fq.gz", full.names = TRUE))
+cutRs <- sort(list.files(path.cut, pattern = "_R2_001.NoN.NoAd.NoP.fq.gz", full.names = TRUE))
+
+# Extract sample names, assuming filenames have format:
+get.sample.name <- function(fname) strsplit(basename(fname), "_")[[1]][1]
+sample.names <- unname(sapply(cutFs, get.sample.name))
+head(sample.names)
+
+# Inspect and read quality profiles
+plotQualityProfile(c(cutFs[10],cutFs[48], cutFs[92]))  
+plotQualityProfile(c(cutRs[10], cutRs[48], cutRs[90]))  
+```
+
+> Filter and trim:
+
+```{r}
+
+# Place filtered files in filtered/subdirectory
+
+filtFs <- file.path(path, "filtered", paste0(sample.names, "_F_filt.fastq.gz"))
+filtRs <- file.path(path, "filtered", paste0(sample.names, "_R_filt.fastq.gz"))
+names(filtFs) <- sample.names
+names(filtRs) <- sample.names
+
+out <- filterAndTrim(cutFs, filtFs, cutRs, filtRs, truncLen=c(227,125),
+              maxN=0, maxEE=c(2,2), truncQ=2, rm.phix=TRUE,
+              compress=TRUE, multithread=TRUE)
+out
+```
+
+> Learn the error rates:
+
+```{r}
+errF <- learnErrors(filtFs, multithread=TRUE)
+errR <- learnErrors(filtRs, multithread=TRUE)
+plotErrors(errF, nominalQ=TRUE)
+```
+
+> Sample inference:
+
+```{r}
+dadaFs <- dada(filtFs, err=errF, multithread=TRUE)
+dadaRs <- dada(filtRs, err=errR, multithread=TRUE)
+dadaFs[[1]]
+```
+
+> Merge paired reads:
+
+```{r}
+mergers <- mergePairs(dadaFs, filtFs, dadaRs, filtRs, verbose=TRUE, justConcatenate = TRUE)
+# Inspect the merger data.frame from the first sample
+head(mergers[[5]])
+```
+
+> Construct sequence table:
+
+```{r}
+seqtab <- makeSequenceTable(mergers)
+dim(seqtab)
+# Inspect distribution of sequence lengths
+table(nchar(getSequences(seqtab)))
+```
+
+> Remove chimeras:
+
+```{r}
+seqtab.nochim <- removeBimeraDenovo(seqtab, method="consensus", multithread=TRUE, verbose=TRUE)
+dim(seqtab.nochim)
+sum(seqtab.nochim)/sum(seqtab)
+```
+
+> Track reads through the pipeline:
+
+```{r}
+getN <- function(x) sum(getUniques(x))
+track <- cbind(out, sapply(dadaFs, getN), sapply(dadaRs, getN), sapply(mergers, getN), rowSums(seqtab.nochim))
+# If processing a single sample, remove the sapply calls: e.g. replace sapply(dadaFs, getN) with getN(dadaFs)
+colnames(track) <- c("input", "filtered", "denoisedF", "denoisedR", "merged", "nonchim")
+rownames(track) <- sample.names
+track
+```
+
+> Assign taxonomy:
+
+```{r}
+taxa <- assignTaxonomy(seqtab.nochim, "~/PROJECTS/DATABASES/DADA2/pr2_version_4.14.0_SSU_dada2.fasta.gz", 
+  taxLevels = c("Kingdom","Supergroup","Division","Class","Order","Family","Genus","Species"), multithread=TRUE)
+
+taxa.print <- taxa # Removing sequence rownames for display only
+rownames(taxa.print) <- NULL
+head(taxa.print)
+taxa.print
+```
+
+> Generate a phyloseq object:
+
+```{r}
+library(phyloseq); packageVersion("phyloseq")
+library(Biostrings); packageVersion("Biostrings")
+
+metadata <- read.csv("~/PROJECTS/18S/18S_metadata_2022-08-18_JOE.csv", header=T, stringsAsFactors = T)
+metadata[metadata == ""] <- NA
+all(rownames(seqtab.nochim) %in% metadata$SampleID)
+rownames(metadata) <- metadata$SampleID
+View(metadata)
+ps <- phyloseq(otu_table(seqtab.nochim, taxa_are_rows=FALSE), sample_data(metadata), tax_table(taxa))
+sample_names(ps)
+#saveRDS(ps, "~/PROJECTS/18S/18S_capuchin_PR2-4.14.0_RL227-125_maxEE2-2_22-08-18.rds")
+
+```

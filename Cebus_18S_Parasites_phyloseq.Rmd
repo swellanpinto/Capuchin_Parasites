@@ -1,0 +1,250 @@
+---
+title: "Cebus_18S_Parasites_phyloseq"
+author: "Melin Lab"
+date: "2022-12-16"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+> Load Data
+
+```{r}
+library(phyloseq); library(ggplot2); library(dplyr); library(vegan); library(phangorn); library(DECIPHER); library(wesanderson)
+
+ps <- readRDS("~/PROJECTS/18S/18S_capuchin_PR2-4.14.0_RL227-125_maxEE2-2_22-08-18.rds")
+ps0 <- ps
+
+#update metadata
+md2 <- read.csv("~/PROJECTS/18S/18S_metadata_corrected.csv")
+row.names(md2) <- md2$SampleID
+sample_data(ps0) <- md2
+sample_data(ps0)$reads <-sample_sums(ps0)
+
+# Remove poorly sequenced samples, non_eukaryotes, and uncharacterized divisions
+ps0 <- prune_samples(sample_sums(ps0) > 2000, ps0)
+
+ps_euk <- subset_taxa(ps0, Kingdom=="Eukaryota")
+ps_euk <- subset_taxa(ps_euk, !is.na(Division) & !Division %in% c("", "uncharacterized"))
+
+ps_bact <- subset_taxa(ps0, Kingdom=="Bacteria")
+ps_bact <- subset_taxa(ps_bact, !is.na(Division) & !Division %in% c("", "uncharacterized"))
+ps_diet <-subset_taxa(ps0, Supergroup=="Archaeplastida"| Class=="Arthropoda")
+
+#remove samples with missing metadata
+#MissingMetadata <- c("Ducky-164A", "Ducky-332A", "Ducky-399A", "Helen-284A", "Helen-409A","Todd-400A", "Todd-416A")
+#ps0 <- subset_samples(ps0, !(SampleID %in% MissingMetadata))
+
+```
+
+> Make Eukaryote tree
+
+```{r}
+
+sequences<-getSequences()
+names(sequences)<-sequences
+alignment <- AlignSeqs(DNAStringSet(sequences), anchor=NA)
+phang.align <- phyDat(as(alignment, "matrix"), type="DNA")
+dm <- dist.ml(phang.align)
+treeNJ <- NJ(dm) # Note, tip order != sequence order
+fit = pml(treeNJ, data=phang.align)
+fitGTR <- update(fit, k=4, inv=0.2)
+fitGTR <- optim.pml(fitGTR, model="GTR", optInv=TRUE, optGamma=TRUE,rearrangement = "stochastic", control =pml.control(trace = 0))
+phy_tree(ps_euk) <- fitGTR$tree 
+
+#phy_tree(ps_euk) <- readRDS("ps_eukTREE.rds")
+
+```
+
+> Filter taxa
+
+```{r}
+
+# rename ASVs and create AS name to sequence lookup table
+ps_euk_rename <- ps_euk
+n_seqs <- seq(ntaxa(ps_euk))
+len_n_seqs <- nchar(max(n_seqs))
+taxa_names(ps_euk_rename) <- paste("ASV", formatC(n_seqs, width = len_n_seqs, flag = "0"), sep = "_")
+ASV_seqs_names <- data.frame(tax_table(ps_euk_rename))
+ASV_seqs_names <- data.frame(cbind(row.names(tax_table(ps_euk_rename)), row.names(tax_table(ps_euk))))
+colnames(ASV_seqs_names) <- c("ASV","Sequence")
+ps_euk <- ps_euk_rename
+
+# remove uncharacterized divisions, plasmids, mitochondria, non-eukaryotes, potential host-contaminants
+
+ps_euk <- subset_taxa(ps_euk, !is.na(Kingdom) & !Kingdom %in% c("", "Eukaryota:plas")) 
+ps_euk <- subset_taxa(ps_euk, !is.na(Kingdom) & !Kingdom %in% c("", "Eukaryota:mito"))
+ps_euk <- subset_taxa(ps_euk, !is.na(Class) & !Class %in% c("", "Craniata"))
+
+# Remove dietary items
+ps_euk_nodiet <- subset_taxa(ps_euk, !is.na(Supergroup) & !Supergroup %in% c("", "Archaeplastida"))
+ps_euk_nodiet <- subset_taxa(ps_euk_nodiet, !is.na(Class) & !Class %in% c("", "Arthropoda"))
+
+#ps_euk_filt <- prune_taxa(taxa_sums(ps_euk) >5, ps_euk)
+
+# Rarefy samples to 500 reads (leaves only 24 samples)
+ps_euk_rar <- rarefy_even_depth(ps_euk,sample.size = 500,rngseed = 100,replace = F)
+ps_euk_rar <- prune_taxa(taxa_sums(ps_euk_rar) > 0, ps_euk_rar)
+ps_euk_nodiet_rar <- rarefy_even_depth(ps_euk_nodiet,sample.size = 500,rngseed = 100,replace = F)
+ps_euk_nodiet_rar <- prune_taxa(taxa_sums(ps_euk_nodiet_rar) > 0, ps_euk_nodiet_rar)
+
+# Make worms only object
+WormClasses <- c("Nematoda","Platyhelminthes","Acanthocephala","Annelida")
+FigWorms <- c("Schistonchus", "Parasitodiplogaster", "Myctolaimus")
+ps_worms <- subset_taxa(ps_euk, Class %in% WormClasses)
+ps_worms <- subset_taxa(ps_worms, !Genus %in% FigWorms)
+
+ps_worms <- prune_taxa(taxa_sums(ps_worms) > 0, ps_worms) 
+ps_worms_filt <- prune_samples(sample_sums(ps_worms) > 0, ps_worms) 
+ps_worms_filt <- prune_taxa(taxa_sums(ps_worms_filt) > 5, ps_worms) 
+
+```
+
+> Figure 4: Alpha diversity
+
+```{r}
+
+# Estimate Chao Richness for eukaryotic and worms only objects
+ps_euk_nodiet_chao <- estimate_richness(ps_euk_nodiet, measures="Chao1")
+sample_data(ps_euk_nodiet)$Chao1 <- ps_euk_nodiet_chao$Chao1
+
+ps_worms_chao <- estimate_richness(ps_worms, measures="Chao1")
+sample_data(ps_worms)$Chao1 <- ps_worms_chao$Chao1
+
+# Take the average Chao1 value for indivuals sampled multiple times in the same season, and remove 2015 samples
+ps_euk_nodiet_average <- as.data.frame(group_by(sample_data(ps_euk_nodiet), identity, season.year, social.group, season, Year) %>% summarize(Chao1_mean=mean(Chao1), )) %>% na.omit
+ps_worms_average <- as.data.frame(group_by(sample_data(ps_worms), identity, season.year, social.group, season, Year) %>% summarize(Chao1_mean=mean(Chao1), )) %>% na.omit
+
+ps_euk_nodiet_average_2014 <- ps_euk_nodiet_average[ps_euk_nodiet_average$Year == "2014",] 
+ps_worms_average_2014 <- ps_worms_average[ps_worms_average$Year == "2014",] 
+
+# Plot alpha diversity 
+
+ChaoPlot_ps_euk_nodiet <- ggplot(ps_euk_nodiet_average_2014, aes(x=season, y=Chao1_mean, fill=season)) + geom_violin(width=0.5) +  geom_boxplot(width = 0.1, outlier.shape = NA) + geom_jitter(width = 0.05,size = 0.75) +
+  scale_fill_manual(name ="SampleType",values=c(wes_palette("GrandBudapest2")[1],wes_palette("GrandBudapest2")[4]))+
+          ggtitle("Chao1 Alpha Diversity of Filtered Eukaryota") +
+          #coord_fixed() +
+          theme_bw() +
+          theme(
+          plot.title = element_text(hjust = 0.5),
+          panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(),
+          panel.background = element_blank(),
+          legend.position="none")
+
+ChaoPlot_ps_worms <- ggplot(ps_worms_average_2014, aes(x=season, y=Chao1_mean, fill=season)) + geom_violin(width=0.5) +  geom_boxplot(width = 0.1, outlier.shape = NA) + geom_jitter(width = 0.05,size = 0.75) +
+  scale_fill_manual(name ="SampleType",values=c(wes_palette("GrandBudapest2")[1],wes_palette("GrandBudapest2")[4]))+
+          ggtitle("Chao1 Alpha Diversity of Helminths") +
+          #coord_fixed() +
+          theme_bw() +
+          theme(
+          plot.title = element_text(hjust = 0.5),
+          panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(),
+          panel.background = element_blank(),
+          legend.position="none")
+
+ChaoPlot_ps_euk_nodiet 
+ChaoPlot_ps_worms
+ChaoPlot_Euk.pdf
+
+hist(ps_euk_nodiet_average_2014$Chao1_mean)
+
+wilcox.test(Chao1_mean ~ season, data=ps_euk_nodiet_average_2014, conf.int = TRUE)
+wilcox.test(Chao1_mean ~ season, data=ps_worms_average_2014, conf.int = TRUE)
+
+```
+
+> Figure 3: Plot phylogenetic tree 
+
+```{r}
+
+ps_worms_species <- tax_glom(ps_worms, taxrank = "Species")
+ps_euk_species <- tax_glom(ps_euk, taxrank = "Species")
+
+plot_tree(ps_worms, color="season", sizebase=2, label.tips="Species")
+
+plot_tree(ps_worms_species, color="season", sizebase=2, label.tips="Species") +
+  scale_color_manual(values=c(wes_palette("GrandBudapest2")[1],wes_palette("GrandBudapest2")[4]))
+
+plot_tree(ps_euk_species, color="season", sizebase=2, label.tips="Species", ladderize="left") +
+  scale_color_manual(values=c(wes_palette("GrandBudapest2")[1],wes_palette("GrandBudapest2")[4]))
+
+```
+
+> Figure 2: Rarefied Class Barplot
+
+``` {r}
+
+
+##### Rarefied dataset
+
+ps_euk_rar
+ps_euk_nodiet_rar
+
+glom_class <- tax_glom(ps_euk_nodiet_rar, taxrank = 'Class')
+glom_NAs <- c("Helen-409A")
+glom_class <- subset_samples(glom_class, !SampleID %in% glom_NAs)
+glom_class_melt<- psmelt(glom_class)
+glom_class_melt$Class <- as.character(glom_class_melt$Class) #convert to character
+
+for (i in 1:length(glom_class_melt$Abundance)){
+  if (glom_class_melt$season[i] == "Dry"){
+    glom_class_melt$Abundance[i] <- (glom_class_melt$Abundance[i] * -1)
+  }
+}
+
+
+#simple way to rename phyla with < 1% abundance
+#glom_class_melt$Class[glom_class_melt$Abundance < 0.01] <- "< 1% abund."
+
+#Count # phyla to set color palette
+Count = length(unique(glom_class_melt$Class))
+Count
+
+unique(glom_class_melt$Class)
+
+glom_class_melt$Class <- factor(glom_class_melt$Class, levels = c("Nematoda", "Ascomycota", "Basidiomycota", "Coccidiomorphea", "Colpodea", "Gregarinomorphea", "Spirotrichea",  "Filosa-Sarcomonadea", "Hypotrichomonadea", "Trichomonadea"))
+
+
+blue_palette <- c("#deebf7","#9ecae1","#3182bd")
+red_palette <- c("#cb181d","#fcae91")
+purple_palette <- c("#6a51a3","#cbc9e2")
+Budapest <- c(wes_palette("GrandBudapest1"), wes_palette("GrandBudapest2"))
+
+Euk_palette <- c(wes_palette(
+  "GrandBudapest2")[4], # Nematoda
+  wes_palette("GrandBudapest2")[1], wes_palette("GrandBudapest2")[3], #Fungi
+  wes_palette("GrandBudapest1")[1], wes_palette("GrandBudapest1")[3], wes_palette("Royal1")[4], #Apicomplexa
+  wes_palette("Royal2")[1], # Ciliophora
+  wes_palette("Royal2")[5],# Cercozoa
+  wes_palette("Zissou1")[3], wes_palette("Zissou1")[4] #Metmonada
+)
+
+class_rar_barplot <- ggplot(data=glom_class_melt, aes(Sample, y=Abundance/5, fill=Class)) +
+  geom_bar(aes(), stat="identity",position="stack") +  
+  coord_flip() +
+  scale_y_continuous(breaks = c(-100, -75, -50, -25, 0, 25, 50, 75,100))+
+  scale_fill_manual(values = Euk_palette) +
+  theme_bw() +
+          theme(
+          panel.grid.major = element_blank(), 
+          panel.grid.minor = element_blank(),
+          panel.background = element_blank())
+  
+
+```
+
+> output tables
+
+```{r}
+
+write.csv(file= "~/PROJECTS/18S/ps_euk_taxtable.csv", tax_table(ps_euk))
+write.csv(file= "~/PROJECTS/18S/ps_euk_OTUtable.csv", otu_table(ps_euk))
+
+write.csv(file= "~/PROJECTS/18S/ps_worms_taxtable.csv", tax_table(ps_worms))
+write.csv(file= "~/PROJECTS/18S/ps_worms_OTUtable.csv", otu_table(ps_worms))
+
+```
